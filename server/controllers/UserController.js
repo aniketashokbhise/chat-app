@@ -1,97 +1,173 @@
-import { message } from "statuses";
-import User from "../models/User";
-import bcrypt from "bcryptjs"
-import { generateToken } from "../lib/utils";
-import cloudinary from "../lib/cloudinary"
+import User from "../models/User.js";
+import bcrypt from "bcryptjs";
+import { generateToken } from "../lib/utils.js";
+import cloudinary from "../lib/cloudinary.js";
 
 
-export const signup = async () => {
+// ================= SIGNUP =================
+export const signup = async (req, res) => {
+
+  try {
+
     const { fullName, email, password, bio } = req.body;
-    try {
-        if (!fullName || !email || !password || !bio) {
-            return res.json({ success: false, message: "Message Details" })
-        }
-        const user = await User.findOne({ email });
-        if (user) {
-            return res.json({ success: false, message: "Message Details" })
-        }
 
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt)
-
-        const newUser = await User.create({ fullName, email, password: hashedPassword, bio })
-
-        const token = generateToken(newUser_id)
-
-        res.json({ success: true, userData: newUser, token, message: "Account created successfully" })
-
+    if (!fullName || !email || !password || !bio) {
+      return res.json({
+        success: false,
+        message: "All fields are required"
+      });
     }
-    catch (error) {
-        console.log(error.message)
-        res.json({ success: false, message: error.message })
 
+    const userExists = await User.findOne({ email });
+
+    if (userExists) {
+      return res.json({
+        success: false,
+        message: "User already exists"
+      });
     }
-}
 
-// Controller login
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
 
+    const newUser = await User.create({
+      fullName,
+      email,
+      password: hashedPassword,
+      bio
+    });
+
+    const token = generateToken(newUser._id);
+
+    res.json({
+      success: true,
+      userData: newUser,
+      token,
+      message: "Account created successfully"
+    });
+
+  } catch (error) {
+
+    console.log(error.message);
+
+    res.json({
+      success: false,
+      message: error.message
+    });
+
+  }
+};
+
+
+// ================= LOGIN =================
 export const login = async (req, res) => {
-    try {
-        const { email, password, bio } = req.body;
-        const userData = await User.findOne({ email })
 
-        const isPasswordCorrect = await bcrypt.compare(password, userData.password);
+  try {
 
-        if (!isPasswordCorrect) {
-            return res.json({ success: false, message: "Invalid credentials" })
-        }
+    const { email, password } = req.body;
 
-        const token = generateToken(userData_id)
+    const userData = await User.findOne({ email });
 
-        res.json({ success: true, userData: newUser, token, message: "Login successfully" })
-
+    if (!userData) {
+      return res.json({
+        success: false,
+        message: "User not found"
+      });
     }
-    catch (error) {
-        console.log(error.message)
-        res.json({ success: false, message: error.message })
+
+    const isPasswordCorrect = await bcrypt.compare(
+      password,
+      userData.password
+    );
+
+    if (!isPasswordCorrect) {
+      return res.json({
+        success: false,
+        message: "Invalid credentials"
+      });
     }
-}
+
+    const token = generateToken(userData._id);
+
+    res.json({
+      success: true,
+      userData,
+      token,
+      message: "Login successful"
+    });
+
+  } catch (error) {
+
+    console.log(error.message);
+
+    res.json({
+      success: false,
+      message: error.message
+    });
+
+  }
+};
 
 
-// controller to check if user is authenticated
+// ================= CHECK AUTH =================
+export const checkAuth = (req, res) => {
 
-export const checkAuth =()=>{
-    res.json({success: true, user: req.user})
-}
+  res.json({
+    success: true,
+    user: req.user
+  });
 
-// controller update user profile details
+};
 
-export const updateProfile = async(req,res)=>{
-    try{
-        const {profilePic, bio, fullName} = req.body;
 
-        const userId = req.user._id;
+// ================= UPDATE PROFILE =================
+export const updateProfile = async (req, res) => {
 
-        let updatedUser;
+  try {
 
-        if(!profilePic)
+    const { profilePic, bio, fullName } = req.body;
+
+    const userId = req.user._id;
+
+    let updatedUser;
+
+    if (!profilePic) {
+
+      updatedUser = await User.findByIdAndUpdate(
+        userId,
+        { bio, fullName },
+        { new: true }
+      );
+
+    } else {
+
+      const upload = await cloudinary.uploader.upload(profilePic);
+
+      updatedUser = await User.findByIdAndUpdate(
+        userId,
         {
-           updatedUser= await User.findByIdAndUpdate(userId,{bio, fullName},
-            {new: true});
+          profilePic: upload.secure_url,
+          bio,
+          fullName
+        },
+        { new: true }
+      );
 
-        }
-        else{
-            const upload = await cloudinary.uploader.upload(profilePic)
-
-            updatedUser = await User.findByIdAndUpdate(userId,{profilePic: upload.secure_url, bio, fullName},{new: true});
-        }
-
-        res.json({success: true, user: updatedUser})
     }
-    catch(error)
-    {
-        console.log(error.message);
-        
-        res.json({success: false, message:error.message})
-    }
-}
+
+    res.json({
+      success: true,
+      user: updatedUser
+    });
+
+  } catch (error) {
+
+    console.log(error.message);
+
+    res.json({
+      success: false,
+      message: error.message
+    });
+
+  }
+};
